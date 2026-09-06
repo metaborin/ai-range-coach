@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadVideo, MediaController, releaseVideo, validateVideoMetadata, validateVideoSize } from './media';
+import { moveRequestedPosition } from './position';
 
 class FakeVideo extends EventTarget {
   src = 'blob:original';
@@ -15,6 +16,10 @@ class FakeVideo extends EventTarget {
   loadMode: 'ready' | 'metadata-only' | 'error' | 'silent' = 'ready';
   frameTime = 1.96;
   presentationTime: number | undefined;
+  autoFrameNotifications = true;
+  ignoreSeek = false;
+  currentTimeQuantum = 0;
+  seekAssignments: number[] = [];
   order: string[] = [];
   callbacks = new Map<number, VideoFrameRequestCallback>();
   nextFrame = 0;
@@ -22,23 +27,29 @@ class FakeVideo extends EventTarget {
   cancelVideoFrameCallback = (id: number) => { this.callbacks.delete(id); };
   private time = 0;
 
-  get currentTime() { return this.time; }
+  get currentTime() { return this.currentTimeQuantum ? Math.floor(this.time / this.currentTimeQuantum) * this.currentTimeQuantum : this.time; }
   set currentTime(value: number) {
     this.order.push('seek');
+    this.seekAssignments.push(value);
+    if (this.ignoreSeek) return;
     this.time = value;
     this.seeking = true;
     this.dispatchEvent(new Event('seeking'));
     setTimeout(() => {
       this.seeking = false;
       this.dispatchEvent(new Event('seeked'));
-      for (const [id, callback] of [...this.callbacks]) {
-        this.callbacks.delete(id);
-        callback(0, {
-          mediaTime: this.frameTime,
-          presentationTime: this.presentationTime ?? performance.now(),
-        } as VideoFrameCallbackMetadata);
-      }
+      if (this.autoFrameNotifications) this.emitFrame();
     }, 0);
+  }
+
+  emitFrame() {
+    for (const [id, callback] of [...this.callbacks]) {
+      this.callbacks.delete(id);
+      callback(0, {
+        mediaTime: this.frameTime,
+        presentationTime: this.presentationTime ?? performance.now(),
+      } as VideoFrameCallbackMetadata);
+    }
   }
 
   enableFrames() {
@@ -179,6 +190,96 @@ describe('frame extraction and competing operations (video/canvas stubs)', () =>
     await vi.advanceTimersByTimeAsync(0);
     expect(await first).toMatchObject({ requestedTimeSec: 2, observedTimeSec: 1.96, timeBasis: 'video-frame-callback', width: 1280, height: 720 });
     expect(video.order.slice(0, 2)).toEqual(['register-frame', 'seek']);
+  });
+
+  it('keeps a 0.01-second seek busy after seeked until a presented frame is observed', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.autoFrameNotifications = false;
+    const media = new MediaController(video.element());
+    let completed = false;
+    const pending = media.seek(0.01).then(() => { completed = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(video.seekAssignments).toEqual([0.01]);
+    expect(video.seeking).toBe(false);
+    expect(completed).toBe(false);
+    expect(video.order.slice(0, 2)).toEqual(['register-frame', 'seek']);
+    await expect(media.seek(0.02)).rejects.toThrow('お待ちください');
+    video.frameTime = 0;
+    video.emitFrame();
+    await pending;
+    expect(completed).toBe(true);
+    expect(video.callbacks.size).toBe(0);
+  });
+
+  it('accepts ten accumulated 0.01-second requests even when both observed times stay unchanged', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.currentTimeQuantum = 1;
+    video.frameTime = 0;
+    const media = new MediaController(video.element());
+    let requested = 0;
+    for (let index = 0; index < 10; index++) {
+      requested = moveRequestedPosition(requested, 0.01, video.duration);
+      const pending = media.seek(requested);
+      await vi.advanceTimersByTimeAsync(0);
+      await pending;
+      expect(video.currentTime).toBe(0);
+    }
+    expect(requested).toBe(0.1);
+    expect(video.seekAssignments).toEqual([0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]);
+    const capture = media.capture(requested);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await capture).toMatchObject({ requestedTimeSec: 0.1, observedTimeSec: 0 });
+  });
+
+  it('finishes a paused fine seek through the finite paint fallback when rVFC never arrives', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.autoFrameNotifications = false;
+    const pending = new MediaController(video.element()).seek(0.01);
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(pending).resolves.toBeUndefined();
+    expect(video.seekAssignments).toEqual([0.01]);
+    expect(video.callbacks.size).toBe(0);
+  });
+
+  it('does not label an old image with a new request when the setter never completes a seek', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.ignoreSeek = true;
+    video.frameTime = 0;
+    const failed = expect(new MediaController(video.element()).capture(0.01)).rejects.toThrow('時間内');
+    // An unrelated presented notification is not proof that the requested seek happened.
+    video.emitFrame();
+    await vi.advanceTimersByTimeAsync(8_000);
+    await failed;
+    expect(canvas.toBlob).not.toHaveBeenCalled();
+    expect(video.callbacks.size).toBe(0);
+  });
+
+  it('rejects a replaced controller and ignores its late rVFC while the replacement is seeking', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.autoFrameNotifications = false;
+    const original = new MediaController(video.element());
+    const oldResult = expect(original.seek(0.01)).rejects.toMatchObject({ name: 'AbortError' });
+    const oldCallback = [...video.callbacks.values()][0];
+    await vi.advanceTimersByTimeAsync(0);
+    original.dispose();
+    await oldResult;
+    video.src = 'blob:replacement';
+    const replacement = new MediaController(video.element());
+    let completed = false;
+    const fresh = replacement.seek(0.02).then(() => { completed = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    oldCallback(0, { mediaTime: 0.01, presentationTime: performance.now() } as VideoFrameCallbackMetadata);
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    video.frameTime = 0.02;
+    video.emitFrame();
+    await fresh;
+    expect(completed).toBe(true);
   });
 
   it('supports missing rVFC without upscaling and rejects endpoint capture', async () => {

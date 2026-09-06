@@ -164,7 +164,7 @@ export default function App() {
         {(view === 'video' || view === 'saved') && <section className="panel">
           <div className="section-heading"><h1>{view === 'saved' ? '保存した1球' : '動画と4つの場面'}</h1>{view === 'video' && <button disabled={blocked} onClick={chooseFile}>動画を選び直す</button>}</div>
           {view === 'video' && <div className="selected-scene"><span className="eyebrow">今から指定する場面</span><h2>{SCENE_LABELS[selected]}</h2><p>{sceneHints[selected]}</p></div>}
-          {videoAsset && <VideoPanel key={videoAsset.id} asset={videoAsset} locked={saving || working} captureLabel="この場面にする" showCapture={view === 'video'}
+          {videoAsset && <VideoPanel key={videoAsset.id} asset={videoAsset} selectedScene={view === 'video' ? selected : undefined} locked={saving || working} captureLabel="この場面にする" showCapture={view === 'video'}
             onBusy={setMediaBusy} onReady={(meta) => {
               setMediaReady(true)
               setDraft((current) => {

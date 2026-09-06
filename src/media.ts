@@ -121,26 +121,35 @@ export function releaseVideo(video: HTMLVideoElement, url: string): void {
 }
 
 type FrameTime = Pick<CapturedFrame, 'observedTimeSec' | 'timeBasis'>;
+type SettledFrame = FrameTime & { currentTimeSec: number };
 
 /** One controller per loaded video; dispose before replacing the source. */
 export class MediaController {
   private readonly lifetime = new AbortController();
   private readonly source: string;
   private busy = false;
+  private settledPosition: { requestedTimeSec: number; currentTimeSec: number } | undefined;
+  private readonly invalidatePosition = () => { this.settledPosition = undefined; };
 
   constructor(private readonly video: HTMLVideoElement) {
     this.source = video.src;
+    this.settledPosition = { requestedTimeSec: video.currentTime, currentTimeSec: video.currentTime };
+    video.addEventListener('seeking', this.invalidatePosition);
+    video.addEventListener('playing', this.invalidatePosition);
   }
 
   dispose(): void {
     this.lifetime.abort();
+    this.video.removeEventListener('seeking', this.invalidatePosition);
+    this.video.removeEventListener('playing', this.invalidatePosition);
+    this.settledPosition = undefined;
   }
 
   async seek(time: number): Promise<void> {
     await this.run(async () => {
       this.validateTime(time, false);
       this.video.pause();
-      await this.moveTo(time, false);
+      await this.moveTo(time);
     });
   }
 
@@ -148,9 +157,9 @@ export class MediaController {
     return this.run(async () => {
       this.validateTime(time, true);
       this.video.pause();
-      const frame = await this.moveTo(time, true);
+      const { currentTimeSec, ...frame } = await this.moveTo(time);
       this.assertCurrent();
-      if (this.video.seeking || !this.video.paused || !this.atTime(time)) throw aborted();
+      if (this.video.seeking || !this.video.paused || !this.atTime(currentTimeSec)) throw aborted();
       const scale = Math.min(1, 1280 / Math.max(this.video.videoWidth, this.video.videoHeight));
       const width = Math.max(1, Math.round(this.video.videoWidth * scale));
       const height = Math.max(1, Math.round(this.video.videoHeight * scale));
@@ -167,7 +176,7 @@ export class MediaController {
         }
         const blob = await this.encode(canvas);
         this.assertCurrent();
-        if (this.video.seeking || !this.video.paused || !this.atTime(time)) throw aborted();
+        if (this.video.seeking || !this.video.paused || !this.atTime(currentTimeSec)) throw aborted();
         return { blob, requestedTimeSec: time, ...frame, width, height };
       } finally {
         canvas.width = 0;
@@ -192,7 +201,7 @@ export class MediaController {
   }
 
   private atTime(time: number): boolean {
-    return Math.abs(this.video.currentTime - time) < 0.001;
+    return Math.abs(this.video.currentTime - time) < 0.000001;
   }
 
   private validateTime(time: number, capture: boolean): void {
@@ -205,25 +214,37 @@ export class MediaController {
     }
   }
 
-  private moveTo(time: number, wantFrame: boolean): Promise<FrameTime> {
+  private moveTo(time: number): Promise<SettledFrame> {
     const video = this.video;
     const signal = this.lifetime.signal;
+    // Comparing only currentTime can skip a new request when the browser exposes
+    // a rounded position. Only a previously settled, identical request may skip.
+    const previous = this.settledPosition;
+    const needsSeek = video.seeking || !previous
+      || Math.abs(previous.requestedTimeSec - time) >= 0.000001
+      || !this.atTime(previous.currentTimeSec);
+    this.settledPosition = undefined;
     return new Promise((resolve, reject) => {
       let finished = false;
       let issued = false;
       let issuedAt = Infinity;
+      let seekCompleted = !needsSeek;
+      let sawSeeking = false;
+      let settledTime: number | undefined;
       let frameId: number | undefined;
       let fallback: ReturnType<typeof setTimeout> | undefined;
       let paintTimeout: ReturnType<typeof setTimeout> | undefined;
       let raf: number | undefined;
-      const hasFrames = wantFrame && typeof video.requestVideoFrameCallback === 'function';
+      const hasFrames = typeof video.requestVideoFrameCallback === 'function';
       const cleanup = () => {
         clearTimeout(deadline);
         clearTimeout(fallback);
         clearTimeout(paintTimeout);
         if (raf !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
         if (frameId !== undefined && typeof video.cancelVideoFrameCallback === 'function') video.cancelVideoFrameCallback(frameId);
-        video.removeEventListener('seeked', ready);
+        video.removeEventListener('seeking', onSeeking);
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('playing', onAbort);
         video.removeEventListener('loadeddata', ready);
         video.removeEventListener('canplay', ready);
         video.removeEventListener('error', onError);
@@ -241,13 +262,15 @@ export class MediaController {
       const done = (frame?: FrameTime) => {
         if (finished) return;
         try { this.assertCurrent(); } catch (error) { fail(error); return; }
-        if (video.seeking || video.readyState < 2 || !this.atTime(time)) {
+        if (!seekCompleted || settledTime === undefined || video.seeking || !video.paused
+          || video.readyState < 2 || !this.atTime(settledTime)) {
           fail(new Error('動画の位置が変更されました。止めてからもう一度指定してください。'));
           return;
         }
         finished = true;
         cleanup();
-        resolve(frame ?? { observedTimeSec: video.currentTime, timeBasis: 'video-current-time' });
+        this.settledPosition = { requestedTimeSec: time, currentTimeSec: settledTime };
+        resolve({ currentTimeSec: settledTime, ...(frame ?? { observedTimeSec: settledTime, timeBasis: 'video-current-time' }) });
       };
       const paintThenDone = () => {
         // A paused, same-time seek may never yield an rVFC. Never wait indefinitely.
@@ -257,16 +280,30 @@ export class MediaController {
         }
       };
       const ready = () => {
-        if (finished || !issued || video.seeking || video.readyState < 2) return;
-        if (!this.atTime(time)) { fail(aborted()); return; }
-        if (!wantFrame) { done(); return; }
+        if (finished || !issued || !seekCompleted || video.seeking || video.readyState < 2) return;
+        if (!video.paused || !Number.isFinite(video.currentTime) || video.currentTime < 0 || video.currentTime > video.duration) { fail(aborted()); return; }
+        // The actual browser position may be rounded. Keep that observation tied
+        // to this completed seek, rather than treating it as the next request.
+        settledTime ??= video.currentTime;
+        if (!this.atTime(settledTime)) { fail(aborted()); return; }
         if (fallback === undefined) fallback = setTimeout(paintThenDone, hasFrames ? 350 : 0);
+      };
+      const onSeeking = () => {
+        if (!issued || finished) return;
+        if (!needsSeek || sawSeeking) { fail(aborted()); return; }
+        sawSeeking = true;
+      };
+      const onSeeked = () => {
+        if (!issued || finished || video.seeking) return;
+        seekCompleted = true;
+        ready();
       };
       const onFrame: VideoFrameRequestCallback = (_now, metadata) => {
         frameId = undefined;
         if (finished) return;
         // Ignore notifications from before this seek, including an old queued frame.
-        if (issued && !video.seeking && video.readyState >= 2 && this.atTime(time)
+        if (issued && seekCompleted && settledTime !== undefined && !video.seeking && video.paused
+          && video.readyState >= 2 && this.atTime(settledTime)
           && Number.isFinite(metadata.presentationTime) && metadata.presentationTime >= issuedAt
           && Number.isFinite(metadata.mediaTime) && metadata.mediaTime >= 0 && metadata.mediaTime <= video.duration) {
           done({ observedTimeSec: metadata.mediaTime, timeBasis: 'video-frame-callback' });
@@ -275,7 +312,9 @@ export class MediaController {
         }
       };
       const deadline = setTimeout(() => fail(new Error('動画の位置調整が時間内に完了しませんでした。もう一度お試しください。')), 8_000);
-      video.addEventListener('seeked', ready);
+      video.addEventListener('seeking', onSeeking);
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('playing', onAbort);
       video.addEventListener('loadeddata', ready);
       video.addEventListener('canplay', ready);
       video.addEventListener('error', onError);
@@ -285,7 +324,6 @@ export class MediaController {
         this.assertCurrent();
         // Register before assigning currentTime, otherwise Safari may miss the frame.
         if (hasFrames) frameId = video.requestVideoFrameCallback(onFrame);
-        const needsSeek = video.seeking || !this.atTime(time);
         issuedAt = performance.now();
         issued = true;
         if (needsSeek) video.currentTime = time;
