@@ -112,14 +112,14 @@ test('actual video → four distinct JPEGs → input → save/reload/edit/replac
   await info.attach('actual-four-frame-colors.json', { body: JSON.stringify(colors), contentType: 'application/json' });
 
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click();
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('当たりを選んでください');
   await expect(page.getByRole('alert')).toContainText('方向を選んでください');
   expect((await databaseSnapshot(page)).sessions).toHaveLength(0);
   await chooseReport(page, 'わからない', 'わからない');
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
-  await expect(page.getByText('フィニッシュで、無理なく静止できる強さで振る。', { exact: true })).toBeVisible();
-  await expect(page.locator('.result')).toContainText('動作確認用の見本・動画未分析');
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
+  await expect(page.getByText('未分析。分析しなくても、この記録を保存できます。', { exact: true })).toBeVisible();
+  await expect(page.locator('.result')).not.toContainText('フィニッシュで、無理なく静止できる強さで振る。');
   await saveResult(page, true);
 
   const saved = await databaseSnapshot(page);
@@ -128,7 +128,7 @@ test('actual video → four distinct JPEGs → input → save/reload/edit/replac
   expect(saved.sessions[0].sets).toHaveLength(1);
   expect(saved.sessions[0].sets[0].shots).toHaveLength(1);
   expect(saved.sessions[0].sets[0].shots[0].selfReport).toEqual({ contact: 'unknown', direction: 'unknown' });
-  expect(saved.sessions[0].sets[0].analysisResult).toMatchObject({ kind: 'dummy', analyzed: false });
+  expect(saved.sessions[0].sets[0].analysisResult).toBeNull();
   for (const asset of saved.assets) {
     expect(asset.isBlob).toBe(true);
     expect(asset.blobSize).toBeGreaterThan(0);
@@ -156,7 +156,7 @@ test('actual video → four distinct JPEGs → input → save/reload/edit/replac
   await captureScene(page, 'トップ', 1.6);
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click();
   await chooseReport(page, '良い', 'ほぼまっすぐ');
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
   await saveResult(page);
   const edited = await databaseSnapshot(page);
   expect(edited.sessions).toHaveLength(1);
@@ -179,7 +179,7 @@ test('actual video → four distinct JPEGs → input → save/reload/edit/replac
   for (const scene of scenes) await captureScene(page, scene.label, scene.time);
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click();
   await expect(page.getByRole('group').getByRole('button', { pressed: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('当たりを選んでください');
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('button', { name: 'ホームへ', exact: true }).click();
@@ -208,7 +208,7 @@ test('injected quota failure preserves edited UI and old committed video/JPEGs, 
   await prepareFourScenes(page);
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click();
   await chooseReport(page, 'わからない', 'わからない');
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
   await saveResult(page);
   const before = await databaseSnapshot(page);
 
@@ -216,7 +216,7 @@ test('injected quota failure preserves edited UI and old committed video/JPEGs, 
   await captureScene(page, 'トップ', 1.6);
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click();
   await chooseReport(page, 'ミス', '左');
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click();
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click();
 
   const originalPut = await page.evaluateHandle(() => IDBObjectStore.prototype.put);
   await page.evaluate(() => {

@@ -22,7 +22,7 @@ async function saveRealVideoRecord(page: Page) {
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click()
   await page.getByRole('group', { name: /当たり/ }).getByRole('button', { name: 'わからない', exact: true }).click()
   await page.getByRole('button', { name: 'ほぼまっすぐ', exact: true }).click()
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click()
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click()
   await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
   await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '再生', exact: true })).toBeEnabled()
@@ -41,7 +41,7 @@ async function expectDecodedSavedMedia(page: Page) {
   await page.getByRole('button', { name: '再生', exact: true }).click()
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0)
   await page.getByRole('button', { name: '一時停止', exact: true }).click()
-  await expect(page.getByText('動作確認用の見本・動画未分析', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('未分析。分析しなくても、この記録を保存できます。', { exact: true })).toBeVisible()
   for (const time of ['0.50', '1.50', '2.50', '3.50']) await expect(page.getByText(`指定 ${time} 秒`, { exact: false })).toBeVisible()
 }
 
@@ -191,7 +191,7 @@ test('[local dist] changed worker waits without reloading an unsaved draft; clos
     await page.getByText('ホーム画面・オフラインの準備', { exact: true }).click()
     await expect(page.getByText(/アプリの更新があります/)).toBeVisible()
     // Follow the product's save-before-update instructions, including the modified input.
-    await page.getByRole('button', { name: '見本結果へ', exact: true }).click()
+    await page.getByRole('button', { name: '内容を確認', exact: true }).click()
     await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
     await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
     // An uncontrolled blank page lets us observe activation after every old client closes.

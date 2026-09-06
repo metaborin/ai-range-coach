@@ -10,7 +10,7 @@ const outputPaths = files.map(path => relative('dist', path).replaceAll('\\', '/
 const assertions = []
 function check(label, condition) { assertions.push({ label, passed: Boolean(condition) }) }
 const source = walk('src').filter(p => !/\.test\.ts$/.test(p)).map(p => readFileSync(p, 'utf8')).join('\n')
-const textFiles = files.filter(p => /\.(js|html|css|webmanifest)$/.test(p))
+const textFiles = files.filter(p => /\.(js|html|css|webmanifest|json)$/.test(p))
 const distText = textFiles.map(p => readFileSync(p, 'utf8')).join('\n')
 const html = readFileSync('dist/index.html', 'utf8')
 const worker = readFileSync('dist/sw.js', 'utf8')
@@ -18,10 +18,15 @@ function existingAppAsset(reference) {
   const url = new URL(reference, appUrl)
   return url.origin === appUrl.origin && url.pathname.startsWith(appPath) && outputPaths.includes(url.pathname.slice(appPath.length))
 }
-check('No application upload, analytics or remote font code', !/\b(?:fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|localStorage)|https:\/\//.test(source))
+check('No browser-persisted credentials, analytics transport or sockets', !/\b(?:XMLHttpRequest|sendBeacon|WebSocket|localStorage)/.test(source))
+const config = JSON.parse(readFileSync('dist/analysis-config.json', 'utf8'))
+let validApi = config.apiUrl === ''
+try { const url = new URL(config.apiUrl); validApi ||= url.protocol === 'https:' && url.href === `${url.origin}/` && !url.username && !url.password } catch { /* Empty configuration intentionally disables AI. */ }
+check('Public runtime configuration contains only an empty or HTTPS API origin', Object.keys(config).join() === 'apiUrl' && validApi)
+check('API calls omit credentials and caching and never include OpenAI credentials', source.includes("cache: 'no-store'") && source.includes("credentials: 'omit'") && !/OPENAI_API_KEY|APP_PASSWORD|api\.openai\.com/.test(source))
 check('No private keys or OpenAI-shaped API key literals in application and dist', !/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|sk-(?:proj-)?[A-Za-z0-9_-]{24,}/.test(source + distText))
 check('No video fixture in dist', !files.some(p => /\.(mp4|mov|webm|rgb)$/i.test(p)))
-check('Only static application assets are distributed, without reports, source maps, local paths or repository files', outputPaths.every(path => /\.(?:js|css|html|png|webmanifest)$/.test(path)) && !/handoff\/|evidence\/|node_modules\/|[A-Z]:[\\/](?:Users|Program Files)[\\/]/i.test(distText))
+check('Only static application assets are distributed, without reports, source maps, local paths or repository files', outputPaths.every(path => /\.(?:js|css|html|png|webmanifest)$/.test(path) || path === 'analysis-config.json') && !/handoff\/|evidence\/|node_modules\/|[A-Z]:[\\/](?:Users|Program Files)[\\/]/i.test(distText))
 const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'))
 check('Manifest id, start_url and scope match the confirmed repository subpath', manifest.id === appPath && manifest.start_url === appPath && manifest.scope === appPath)
 check('Standalone Japanese manifest with real app-scoped icons', manifest.display === 'standalone' && manifest.lang === 'ja' && manifest.icons.length >= 2 && manifest.icons.every(icon => existingAppAsset(icon.src)))
@@ -32,7 +37,8 @@ check('No site-root asset, manifest, icon or service-worker reference remains in
 const precacheReferences = Array.from(worker.matchAll(/"url":"([^"]+)"/g), match => match[1])
 check('Injected precache URLs resolve to real files inside the application folder', precacheReferences.length > 0 && precacheReferences.every(existingAppAsset))
 const precachePaths = precacheReferences.map(reference => new URL(reference, appUrl).pathname.slice(appPath.length))
-check('Precache includes every distributed asset except the service worker itself', outputPaths.filter(path => path !== 'sw.js').every(path => precachePaths.includes(path)))
+check('Precache includes app assets but excludes runtime API config', outputPaths.filter(path => !['sw.js', 'analysis-config.json'].includes(path)).every(path => precachePaths.includes(path)) && !precachePaths.includes('analysis-config.json'))
+check('Service worker has no runtime API caching or background retry', !/v1\/analyses|BackgroundSync|Queue|NetworkFirst|StaleWhileRevalidate/.test(worker))
 check('Service worker retains the application cache namespace and registration scope', worker.includes('ai-range-coach') && worker.includes('self.registration.scope'))
 check('IndexedDB retains the existing application-specific database name', /DATABASE_NAME\s*=\s*['"]ai-range-coach['"]/.test(readFileSync('src/storage.ts', 'utf8')) && distText.includes('ai-range-coach'))
 check('Service worker contains no skipWaiting', !worker.includes('skipWaiting'))

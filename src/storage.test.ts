@@ -56,7 +56,8 @@ describe('atomic IndexedDB session and Blob storage', () => {
     const restored = await reopened.load(session.id);
     expect(restored).toBeDefined();
     expect(restored!.session.id).toBe(session.id);
-    expect(restored!.session.sets).toEqual(session.sets);
+    expect(restored!.session.sets).toMatchObject(session.sets);
+    expect(restored!.session.sets[0].shots[0].inputRevision).toBe(0);
     expect(restored!.assets.size).toBe(5);
     for (const [id, expected] of assets) {
       const asset = restored!.assets.get(id)!;

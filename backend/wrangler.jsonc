@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-range-coach-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-06",
+  "workers_dev": true,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "OPENAI_MODEL": "gpt-5.6-terra",
+    "ALLOWED_ORIGIN": "https://metaborin.github.io",
+    "ENVIRONMENT": "production"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ANALYSIS", "class_name": "AnalysisCoordinator" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AnalysisCoordinator"] }],
+  "env": {
+    "development": {
+      "name": "ai-range-coach-api-dev",
+      "vars": { "OPENAI_MODEL": "gpt-5.6-terra", "ALLOWED_ORIGIN": "http://localhost:5173", "ENVIRONMENT": "development" },
+      "durable_objects": {
+        "bindings": [{ "name": "ANALYSIS", "class_name": "AnalysisCoordinator" }]
+      }
+    }
+  }
+}

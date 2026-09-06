@@ -20,6 +20,11 @@ try {
   expect(documentResponse.status()).toBe(200)
   expect(page.url()).toBe(url.href)
   await expect(page.getByRole('button', { name: '1球の動画を選ぶ' })).toBeVisible()
+  await expect(page.locator('.phase')).toHaveText('Phase 1')
+  const configResponse = await page.request.get(new URL('analysis-config.json', url).href)
+  expect(configResponse.status()).toBe(200)
+  const analysisConfig = await configResponse.json()
+  expect(analysisConfig).toEqual(JSON.parse(readFileSync('public/analysis-config.json', 'utf8')))
   const assetUrls = await page.locator('script[src],link[href]').evaluateAll(elements => elements.map(element => element.getAttribute('src') || element.getAttribute('href')))
   for (const reference of assetUrls) {
     const asset = new URL(reference, page.url())
@@ -66,7 +71,7 @@ try {
   }
   expect(responses.every(response => response.status >= 200 && response.status < 400 && new URL(response.url).pathname.startsWith(base))).toBe(true)
   await page.screenshot({ path: 'evidence/deployed-mobile.png', fullPage: true })
-  const result = { checkedAt: new Date().toISOString(), url: page.url(), build, expectedCommit, browser: browser.version(), manifest, assetUrls, cacheAudit, responses, result: 'passed', iPhone: 'not tested' }
+  const result = { checkedAt: new Date().toISOString(), url: page.url(), build, expectedCommit, browser: browser.version(), manifest, analysisConfig, assetUrls, cacheAudit, responses, result: 'passed', iPhone: 'not tested' }
   writeFileSync('evidence/deployed-verification.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify({ result: result.result, url: result.url, build, browser: result.browser, assets: assetUrls.length, scope: url.href, iPhone: result.iPhone }, null, 2))
 } finally { await context.close(); await browser.close() }

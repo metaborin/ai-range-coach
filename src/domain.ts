@@ -1,3 +1,5 @@
+import { validateAiAnalysis, type AiAnalysis } from '../shared/analysis';
+export type { AiAnalysis } from '../shared/analysis';
 export type Scene = 'address' | 'top' | 'impact' | 'finish';
 export type Contact = 'good' | 'fair' | 'poor' | 'unknown';
 export type Direction = 'left' | 'center' | 'right' | 'unknown';
@@ -29,6 +31,8 @@ export interface SceneCapture {
 
 export interface Shot {
   id: string;
+  inputRevision?: number;
+  inputFingerprint?: string;
   order: number;
   video: {
     assetId: string;
@@ -55,7 +59,7 @@ export interface PracticeSet {
   id: string;
   createdAt: string;
   shots: Shot[];
-  analysisResult: DummyAnalysis | null;
+  analysisResult: DummyAnalysis | AiAnalysis | null;
 }
 
 export interface Session {
@@ -183,10 +187,12 @@ export function validateSession(session: Session): string[] {
     }
   }
   const analysis = set.analysisResult;
-  if (!analysis || !isId(analysis.id) || analysis.kind !== 'dummy' || analysis.analyzed !== false
+  if (analysis?.kind === 'ai') {
+    if (!validateAiAnalysis(analysis) || analysis.shotId !== shot.id) errors.push('AI分析の保存形式が不正です。');
+  } else if (analysis && (!isId(analysis.id) || analysis.kind !== 'dummy' || analysis.analyzed !== false
     || !isDate(analysis.createdAt) || analysis.nextFocus !== DUMMY_FOCUS || analysis.disclaimer !== DUMMY_DISCLAIMER
-    || analysis.inputShotIds.length !== 1 || analysis.inputShotIds[0] !== shot.id) {
-    errors.push('動作確認用の見本を表示してから保存してください。');
+    || analysis.inputShotIds.length !== 1 || analysis.inputShotIds[0] !== shot.id)) {
+    errors.push('動作確認用の見本の保存形式が不正です。');
   }
   return errors;
 }

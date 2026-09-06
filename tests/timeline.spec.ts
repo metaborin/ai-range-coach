@@ -131,7 +131,7 @@ test('continuous delayed drag follows every input and commits the latest decoded
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click()
   await page.getByRole('group', { name: /^当たり/ }).getByRole('button', { name: '良い', exact: true }).click()
   await page.getByRole('button', { name: 'ほぼまっすぐ', exact: true }).click()
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click()
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click()
   await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
   await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
   const impactMetadata = await page.evaluate(async () => new Promise<NonNullable<Session['sets'][number]['shots'][number]['scenes']['impact']>>((resolve, reject) => {

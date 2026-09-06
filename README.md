@@ -1,6 +1,6 @@
-# AIレンジコーチ — Phase 0
+# AIレンジコーチ — Phase 1
 
-1球のスイング動画、手動で選ぶ4場面、自分が感じた当たり・方向を端末内に記録する日本語PWAです。見本の練習課題は固定データで、動画をAI分析していません。
+1球のスイング動画、手動で選ぶ4場面、自分が感じた当たり・方向を端末内に記録する日本語PWAです。保存済みの1球から、AIに次の練習で試すことを1つ尋ねられます。AI用サーバーが未設定の場合は「準備中」と表示し、動画操作と未分析での保存を利用できます。旧Phase 0の見本はAI結果と区別します。
 
 [アプリを開く](https://metaborin.github.io/ai-range-coach/)。[公開処理](https://github.com/metaborin/ai-range-coach/actions/workflows/pages.yml)で更新の状態を確認できます。
 
@@ -8,7 +8,8 @@
 
 1. Safariで配信先を開き、共有メニューから「ホーム画面に追加」。追加したアイコンから起動します。
 2. 「1球の動画を選ぶ」で写真ライブラリの短い通常動画を選び、「再生」→「一時停止」。タイムラインを動かし、「トップを選ぶ」→「この場面にする」で最初の1枚を確認します。
-3. アドレス・トップ・インパクト付近・フィニッシュを順に指定し、「当たりと方向へ」→本人入力→「見本結果へ」→「この端末に保存」。再起動後は「記録を開く」で再生できます。
+3. アドレス・トップ・インパクト付近・フィニッシュを順に指定し、「当たりと方向へ」→本人入力→「内容を確認」→「この端末に保存」。再起動後は「記録を開く」で再生できます。
+4. AIの設定後は、保存した画面で「アプリ専用パスワード」を入力し、送信内容と料金の案内を確認して「AIで分析する」。成功結果は同じ記録へ保存します。保存に失敗した結果は「結果をこの端末に保存し直す」でAPIを呼び直さず保存できます。
 
 通常利用にPC起動や同じWi-Fiへの接続は不要です。初回はオンラインで開きます。「ホーム画面・オフラインの準備」→「オフラインの準備を確認」が完了してから、同じPWAのオフライン起動・保存済み動画の再生を試してください。
 
@@ -20,7 +21,7 @@
 
 - 推奨：5〜15秒、1080p、通常撮影の30/60fps。暫定上限は0秒超〜30秒以下、100 MiB以下。
 - MOV/MP4等は実際に読込・再生を試します。全HEVC・4K・HDR・スロー動画を保証しません。0.01秒も移動を要求する時間幅で、厳密なコマ送りではありません。
-- 動画・JPEG4枚・入力はIndexedDBに保存し、外部へ送信しません。アプリ本体の取得・更新には通信します。
+- 動画・JPEG4枚・入力はIndexedDBに保存します。「AIで分析する」を押したときだけ、JPEG4枚・場面の時刻・当たり/方向を専用Cloudflare Worker経由でOpenAIへ送信し、API利用料が発生します。元動画・音声・元ファイル名・他の記録は送信しません。
 - 元動画は写真アプリに残してください。端末内保存の永久保持、Safariとホーム画面PWAの共有、旧URLからの自動移行、未保存での終了からの復元は保証しません。
 - 更新時は作業を保存し、このアプリを開いたタブをすべて閉じて再起動します。編集中の強制再読込は行いません。
 - 更新後は「対象ビルド」と保存済み記録を確認します。更新のためにホーム画面のアイコンを削除したり、Webサイトデータを消したりする必要はありません。
@@ -32,6 +33,7 @@ Node.js 24とnpmを使います。
 
 ```sh
 npm ci
+npm --prefix backend ci
 npm run dev
 ```
 
@@ -41,6 +43,8 @@ npm run dev
 npm run typecheck
 npm run lint
 npm test
+npm run typecheck:backend
+npm run test:backend
 npm run build
 npm run verify:dist
 npx playwright install chromium
@@ -53,4 +57,20 @@ npm run test:e2e -- --project=chromium
 
 `deployment.config.json`の専用リポジトリ名から`/ai-range-coach/`を設定します。`.github/workflows/pages.yml`は`main`へのpushと手動実行で検証・ビルドし、`dist`だけを公開します。リポジトリのSettings → Pages → Sourceは「GitHub Actions」です。APIキー、PAT、SSH鍵、証明書は不要です。デプロイはGitHub管理の標準Actions認証を利用します。
 
-ローカル報告・証拠・開発引き継ぎ資料は公開対象外です。個人動画を追加しないでください。この段階ではAPI、バックエンド、複数球セット、比較、姿勢解析、分割、同期を実装していません。
+ローカル報告・証拠・開発引き継ぎ資料は公開対象外です。個人動画を追加しないでください。複数球UI・比較・自動姿勢解析・分割・同期は対象外です。
+
+## 個人用分析サーバーの設定
+
+`backend/wrangler.jsonc`はCloudflare WorkersとSQLite Durable Object 1個を設定します。無料プランで始め、有料変更はしません。無料枠内に収まる保証はありません。Node 24で`npm --prefix backend ci`、Cloudflareの無料アカウントへログイン後、`npm --prefix backend run deploy`で配信します。アカウント・課金・Secret登録は所有者が行います。
+
+WorkerのSettings → Variables and Secretsへ、Secret型で`OPENAI_API_KEY`と`APP_PASSWORD`を直接登録してください。後者はAPIキーと別の24文字以上のランダムな専用パスワードです。値をコード・チャット・ログ・Pagesのビルドへ入れません。モデルはサーバー側の`OPENAI_MODEL=gpt-5.6-terra`で固定します。
+
+公開されたWorkerのHTTPS originを`public/analysis-config.json`の`apiUrl`へ設定してPagesを更新します。空欄ならAI分析は無効です。CORSは`https://metaborin.github.io`を許可しますが、開始・状態・結果すべてで専用パスワードの認証が必要です。ブラウザはパスワードをメモリだけに保持します。
+
+1画像1 MiB・4枚計4 MiB・本文6 MiBまで。元画像は最大長辺1280pxのまま保存し、必要なら送信用コピーだけを圧縮します。サーバーで本人全体の同時1件・日本時間1日20回/月100回を原子的に予約します。回数制限は金額上限ではありません。専用OpenAI Projectの月5 USD hard spend limitも設定してください。通知とは別の設定で、反映遅延による超過余地があります。
+
+通信が切れた場合は同じ要求IDで状態を確認します。自動再送は行いません。「待機を中止」は課金取消ではありません。復旧結果はサーバーに最大10分、ID・状態は要求開始から24時間保持し、画像は永続保存しません。端末の保存済み結果はオフラインでも閲覧できます。OpenAIへは`store:false`を指定しますが、OpenAI側の不正利用監視等の保持を無効にするものではありません。
+
+画像から見えたこと、本人申告、判断の限界を区別します。4静止画から接触瞬間・速度・角度等を断定しません。根拠が足りない場合は撮影を改善する行動1つを提案します。モック試験の成功は実API接続やゴルフ助言の品質保証ではありません。
+
+公式資料：[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)、[データ保持](https://developers.openai.com/api/docs/guides/your-data)、[Cloudflare DOの無料枠](https://developers.cloudflare.com/durable-objects/platform/pricing/)。

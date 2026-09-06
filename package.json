@@ -15,7 +15,10 @@
     "preview": "vite preview",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:fixture": "node scripts/generate-fixture.mjs",
-    "verify:dist": "node scripts/verify-dist.mjs"
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "typecheck:backend": "npm --prefix backend run typecheck",
+    "test:backend": "npm --prefix backend test",
+    "build:backend": "npm --prefix backend run build"
   },
   "dependencies": {
     "idb": "8.0.3",

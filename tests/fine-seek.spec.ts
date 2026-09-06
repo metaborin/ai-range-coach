@@ -89,7 +89,7 @@ test('fine requests move the decoded video, capture the latest requested image a
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click()
   await page.getByRole('group', { name: /^当たり/ }).getByRole('button', { name: '良い', exact: true }).click()
   await page.getByRole('button', { name: 'ほぼまっすぐ', exact: true }).click()
-  await page.getByRole('button', { name: '見本結果へ', exact: true }).click()
+  await page.getByRole('button', { name: '内容を確認', exact: true }).click()
   await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
   await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
   await page.reload()

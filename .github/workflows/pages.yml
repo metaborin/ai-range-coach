@@ -1,4 +1,4 @@
-name: Deploy Phase 0 to GitHub Pages
+name: Verify and deploy AI Range Coach to GitHub Pages
 
 on:
   push:
@@ -32,12 +32,18 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Install locked dependencies
         run: npm ci
+      - name: Install locked Worker test dependencies
+        run: npm --prefix backend ci
       - name: Type check
         run: npm run typecheck
       - name: Lint
         run: npm run lint
       - name: Unit tests
         run: npm test
+      - name: Check Worker types
+        run: npm run typecheck:backend
+      - name: Verify Worker and real SQLite Durable Object with mocked upstream
+        run: npm run test:backend
       - name: Build production app
         run: npm run build
       - name: Verify deployment files
