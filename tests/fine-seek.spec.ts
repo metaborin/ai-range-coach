@@ -59,7 +59,7 @@ test('fine requests move the decoded video, capture the latest requested image a
   // Advancing from top to impact selects fine mode; a manual normal choice above
   // remains effective while operating within that earlier impact selection.
   await expect(mode(page, '細かく：0.01秒')).toHaveAttribute('aria-pressed', 'true')
-  await seek(page, 2.4)
+  await seek(page, 2.41)
   const before = await circlePosition(page.locator('video'))
   const forward = page.getByRole('button', { name: '0.01秒進む', exact: true })
   const accepted: number[] = []
@@ -69,9 +69,9 @@ test('fine requests move the decoded video, capture the latest requested image a
     await expect(forward).toBeEnabled()
     accepted.push(await displayedRequest(page))
   }
-  expect(accepted).toEqual([2.41, 2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49, 2.5])
-  await expect(timeline(page)).toHaveValue('2.5')
-  await expect(page.getByLabel('指定位置', { exact: true })).toContainText('指定 2.500')
+  expect(accepted).toEqual([2.42, 2.43, 2.44, 2.45, 2.46, 2.47, 2.48, 2.49, 2.5, 2.51])
+  await expect(timeline(page)).toHaveValue('2.51')
+  await expect(page.getByLabel('指定位置', { exact: true })).toContainText('指定 2.510')
   const after = await circlePosition(page.locator('video'))
   expect(before.count).toBeGreaterThan(500)
   expect(after.count).toBeGreaterThan(500)
@@ -84,7 +84,7 @@ test('fine requests move the decoded video, capture the latest requested image a
   await expect(impact).toBeVisible()
   const extracted = await circlePosition(impact)
   expect(Math.abs(extracted.x - after.x)).toBeLessThan(1)
-  await expect(page.locator('.frame').filter({ has: impact })).toContainText('指定 2.50 秒')
+  await expect(page.locator('.frame').filter({ has: impact })).toContainText('指定 2.51 秒')
   await captureAt(page, 'フィニッシュ', 3.4)
   await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click()
   await page.getByRole('group', { name: /^当たり/ }).getByRole('button', { name: '良い', exact: true }).click()
@@ -96,7 +96,7 @@ test('fine requests move the decoded video, capture the latest requested image a
   await page.getByRole('button', { name: '記録を開く', exact: true }).click()
   for (const scene of ['アドレス', 'トップ', 'インパクト付近', 'フィニッシュ']) await expect(page.getByAltText(scene, { exact: true })).toBeVisible()
   expect(await circlePosition(page.getByAltText('インパクト付近', { exact: true }))).toEqual(extracted)
-  await expect(page.locator('.frame').filter({ has: page.getByAltText('インパクト付近', { exact: true }) })).toContainText('指定 2.50 秒')
+  await expect(page.locator('.frame').filter({ has: page.getByAltText('インパクト付近', { exact: true }) })).toContainText('指定 2.51 秒')
   await expect(page.locator('.self-report')).toContainText('良い')
   await page.getByRole('button', { name: '再生', exact: true }).click()
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0.1)
