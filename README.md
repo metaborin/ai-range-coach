@@ -1,0 +1,51 @@
+# AIレンジコーチ — Phase 0
+
+1球のスイング動画、手動で選ぶ4場面、自分が感じた当たり・方向を端末内に記録する日本語PWAです。見本の練習課題は固定データで、動画をAI分析していません。
+
+[アプリの配信先](https://metaborin.github.io/ai-range-coach/) — 初回のPages workflowが完了すると利用できます。[公開処理](https://github.com/metaborin/ai-range-coach/actions/workflows/pages.yml)で状態を確認できます。
+
+## iPhoneで使う
+
+1. Safariで配信先を開き、共有メニューから「ホーム画面に追加」。追加したアイコンから起動します。
+2. 「1球の動画を選ぶ」で写真ライブラリの短い通常動画を選び、「再生」→「一時停止」。タイムラインを動かし、「トップを選ぶ」→「この場面にする」で最初の1枚を確認します。
+3. アドレス・トップ・インパクト付近・フィニッシュを順に指定し、「当たりと方向へ」→本人入力→「見本結果へ」→「この端末に保存」。再起動後は「記録を開く」で再生できます。
+
+通常利用にPC起動や同じWi-Fiへの接続は不要です。初回はオンラインで開きます。「ホーム画面・オフラインの準備」→「オフラインの準備を確認」が完了してから、同じPWAのオフライン起動・保存済み動画の再生を試してください。
+
+## 動画と保存について
+
+- 推奨：5〜15秒、1080p、通常撮影の30/60fps。暫定上限は0秒超〜30秒以下、100 MiB以下。
+- MOV/MP4等は実際に読込・再生を試します。全HEVC・4K・HDR・スロー動画を保証しません。0.1秒移動は厳密なコマ送りではありません。
+- 動画・JPEG4枚・入力はIndexedDBに保存し、外部へ送信しません。アプリ本体の取得・更新には通信します。
+- 元動画は写真アプリに残してください。端末内保存の永久保持、Safariとホーム画面PWAの共有、旧URLからの自動移行、未保存での終了からの復元は保証しません。
+- 更新時は作業を保存し、このアプリを開いたタブをすべて閉じて再起動します。編集中の強制再読込は行いません。
+- 他のGitHub Pagesアプリと同一オリジンになり得ます。DB・キャッシュのアプリ固有名とSW scopeは誤干渉を抑えるためのもので、セキュリティ上の完全な分離ではありません。
+
+## 開発・検証
+
+Node.js 24とnpmを使います。
+
+```sh
+npm ci
+npm run dev
+```
+
+開発URLは `http://localhost:5173/ai-range-coach/`。停止はCtrl+Cです。
+
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run verify:dist
+npx playwright install chromium
+npm run test:e2e -- --project=chromium
+```
+
+本番プレビューは`npm run preview`で、`http://localhost:4173/ai-range-coach/`を開きます。E2E前にはプレビューを停止してください。E2Eは自作の小さい動画と実video/canvas/IndexedDBを使います。Windows WebKitの既知のVP8読込失敗は復帰試験として分け、iPhone実機成功と扱いません。
+
+## GitHub Pages
+
+`deployment.config.json`の専用リポジトリ名から`/ai-range-coach/`を設定します。`.github/workflows/pages.yml`は`main`へのpushと手動実行で検証・ビルドし、`dist`だけを公開します。リポジトリのSettings → Pages → Sourceは「GitHub Actions」です。APIキー、PAT、SSH鍵、証明書は不要です。デプロイはGitHub管理の標準Actions認証を利用します。
+
+ローカル報告・証拠・開発引き継ぎ資料は公開対象外です。個人動画を追加しないでください。この段階ではAPI、バックエンド、複数球セット、比較、姿勢解析、分割、同期を実装していません。
