@@ -1,6 +1,7 @@
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './safe-network'
 import { makeDummy, SCENE_LABELS, type Session } from '../src/domain'
 import { validateAnalysisRequest, type AnalysisReply, type AnalysisRequest, type CoachingAdvice } from '../shared/analysis'
+import { readFileSync } from 'node:fs'
 
 // Only the API boundary is simulated. The app, decoder, JPEG capture, snapshots,
 // fingerprints and IndexedDB use the production implementation and real fixture.
@@ -136,6 +137,38 @@ test('unconfigured analysis stays disabled; a real local record and a Phase 0 du
   await expect(page.getByRole('region', { name: '1球のAI分析' }).getByText('未分析', { exact: true })).toBeVisible()
   await expect(page.locator('.frames img')).toHaveCount(4)
   expect(apiCalls).toBe(0)
+})
+
+test('shipped runtime config does not send analysis on video save or reopen; password and an explicit action are required', async ({ page, liveApiGuard }, info) => {
+  // Intentionally use the real production config. Never enter a credential or
+  // click analysis here; the context guard also blocks unexpected live requests.
+  await saveShot(page)
+  const expected = JSON.parse(readFileSync('public/analysis-config.json', 'utf8')) as { apiUrl: string }
+  const response = await page.request.get(new URL('analysis-config.json', page.url()).href)
+  expect(response.ok()).toBe(true)
+  expect(await response.json()).toEqual(expected)
+  const password = page.getByLabel('アプリ専用パスワード', { exact: true })
+  await expect(password).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'AIで分析する', exact: true })).toBeDisabled()
+  if (expected.apiUrl) {
+    await expect(password).toBeEnabled()
+    await expect(page.getByText('AI分析は準備中です。動画の操作と端末保存は引き続き使えます。')).toHaveCount(0)
+  } else await expect(password).toBeDisabled()
+  await reopen(page)
+  await expect(password).toHaveValue('')
+  if (expected.apiUrl) await expect(password).toBeEnabled()
+  else await expect(page.getByText('AI分析は準備中です。動画の操作と端末保存は引き続き使えます。')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'AIで分析する', exact: true })).toBeDisabled()
+  expect((await records(page))[0].sets[0].analysisResult).toBeNull()
+  expect((await durableSummary(page)).metadata.length).toBe(0)
+  expect(liveApiGuard.blockedRequests).toBe(0)
+  await info.attach('shipped-config-explicit-only.json', {
+    body: JSON.stringify({ appUrl: page.url(), apiUrl: expected.apiUrl, build: await page.locator('.pwa-info small').innerText(),
+      configured: Boolean(expected.apiUrl), credentialEntered: false, analysisClicked: false,
+      pendingRequests: 0, blockedUnexpectedRequests: liveApiGuard.blockedRequests, liveApiPermitted: false }),
+    contentType: 'application/json',
+  })
+  await info.attach('shipped-config-saved-mobile.png', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
 })
 
 test('explicit double tap sends one fixed four-JPEG snapshot; result persists and reopens offline without API calls', async ({ page, context }, info) => {

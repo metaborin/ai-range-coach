@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type TestInfo } from './safe-network';
 import type { MediaAsset, Session } from '../src/domain';
 
 const fixture = 'tests/fixtures/synthetic.webm';

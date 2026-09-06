@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './safe-network'
 test('Windows WebKit: rejected real fixture returns to selection without losing the app', async ({ page }, info) => {
   test.skip(info.project.name !== 'webkit', 'Specific to the observed Windows WebKit media backend limitation')
   await page.goto('./')

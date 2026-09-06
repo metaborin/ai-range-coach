@@ -10,6 +10,17 @@ if (expectedCommit && !/^[a-f0-9]{40}$/i.test(expectedCommit)) throw new Error('
 mkdirSync('evidence', { recursive: true })
 const browser = await chromium.launch()
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+let blockedUnexpectedRequests = 0
+// This inspection never contacts the analysis backend or accepts a credential.
+await context.route(/^https?:\/\//, async route => {
+  const target = new URL(route.request().url())
+  if (target.origin !== url.origin || /^\/v1\/analyses(?:\/|$)/.test(target.pathname)) {
+    blockedUnexpectedRequests++
+    await route.abort('blockedbyclient')
+    return
+  }
+  await route.fallback()
+})
 const responses = []
 context.on('response', response => {
   if (/^https?:/.test(response.url())) responses.push({ url: response.url(), status: response.status(), type: response.headers()['content-type'] || '' })
@@ -25,6 +36,14 @@ try {
   expect(configResponse.status()).toBe(200)
   const analysisConfig = await configResponse.json()
   expect(analysisConfig).toEqual(JSON.parse(readFileSync('public/analysis-config.json', 'utf8')))
+  expect(Object.keys(analysisConfig)).toEqual(['apiUrl'])
+  expect(typeof analysisConfig.apiUrl).toBe('string')
+  if (analysisConfig.apiUrl) {
+    const backend = new URL(analysisConfig.apiUrl)
+    expect(backend.protocol).toBe('https:')
+    expect(backend.pathname).toBe('/')
+    expect(backend.username || backend.password || backend.search || backend.hash).toBe('')
+  }
   const assetUrls = await page.locator('script[src],link[href]').evaluateAll(elements => elements.map(element => element.getAttribute('src') || element.getAttribute('href')))
   for (const reference of assetUrls) {
     const asset = new URL(reference, page.url())
@@ -42,6 +61,7 @@ try {
   const manifest = await manifestResponse.json()
   expect(manifest).toMatchObject({ id: base, start_url: base, scope: base, display: 'standalone' })
   for (const icon of manifest.icons) {
+    expect(new URL(icon.src, url).origin).toBe(url.origin)
     expect(new URL(icon.src, url).pathname.startsWith(base)).toBe(true)
     const response = await page.request.get(new URL(icon.src, url).href)
     expect(response.status()).toBe(200)
@@ -67,11 +87,15 @@ try {
       const entry = new URL(cachedUrl)
       expect(entry.origin).toBe(url.origin)
       expect(entry.pathname.startsWith(base)).toBe(true)
+      expect(entry.pathname.endsWith('/analysis-config.json')).toBe(false)
     }
   }
   expect(responses.every(response => response.status >= 200 && response.status < 400 && new URL(response.url).pathname.startsWith(base))).toBe(true)
+  expect(blockedUnexpectedRequests, 'Unexpected live API traffic was blocked before sending').toBe(0)
   await page.screenshot({ path: 'evidence/deployed-mobile.png', fullPage: true })
-  const result = { checkedAt: new Date().toISOString(), url: page.url(), build, expectedCommit, browser: browser.version(), manifest, analysisConfig, assetUrls, cacheAudit, responses, result: 'passed', iPhone: 'not tested' }
+  const result = { checkedAt: new Date().toISOString(), url: page.url(), build, expectedCommit, browser: browser.version(), manifest, analysisConfig,
+    analysisSafety: { configured: Boolean(analysisConfig.apiUrl), blockedUnexpectedRequests, liveApiPermitted: false, credentialEntered: false },
+    assetUrls, cacheAudit, responses, result: 'passed', iPhone: 'not tested' }
   writeFileSync('evidence/deployed-verification.json', JSON.stringify(result, null, 2))
   console.log(JSON.stringify({ result: result.result, url: result.url, build, browser: result.browser, assets: assetUrls.length, scope: url.href, iPhone: result.iPhone }, null, 2))
 } finally { await context.close(); await browser.close() }

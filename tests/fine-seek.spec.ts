@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from './safe-network'
 
 const fixture = 'tests/fixtures/synthetic.webm'
 const captureButton = (page: Page) => page.getByRole('button', { name: 'この場面にする', exact: true })

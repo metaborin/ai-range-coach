@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, guardLiveApi, type Page } from './safe-network'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -149,6 +149,7 @@ test('[local dist] changed worker waits without reloading an unsaved draft; clos
   if (!address || typeof address === 'string') throw new Error('Test server did not bind a local TCP port')
   const origin = `http://127.0.0.1:${address.port}`
   const context = await browser.newContext()
+  const apiGuard = await guardLiveApi(context, origin)
   try {
     // Seed a different app's Cache Storage and IndexedDB before this app installs.
     // They share an origin; namespacing is collision avoidance, not a security boundary.
@@ -231,5 +232,6 @@ test('[local dist] changed worker waits without reloading an unsaved draft; clos
   } finally {
     await context.close()
     await new Promise<void>((resolve, reject) => { server.close((error) => error ? reject(error) : resolve()); server.closeAllConnections() })
+    expect(apiGuard.blockedRequests, 'Unexpected live API traffic was blocked before sending').toBe(0)
   }
 })

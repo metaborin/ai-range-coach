@@ -19,6 +19,7 @@ describe('real SQLite Durable Object; only the OpenAI network is mocked', { conc
       assert.equal(preflight.status, 204)
       assert.equal(preflight.headers.get('access-control-allow-origin'), ORIGIN)
       assert.equal(preflight.headers.get('access-control-allow-credentials'), null)
+      assert.equal((await app.sql('SELECT * FROM quota')).length, 0)
     } finally { await app.close() }
   })
 

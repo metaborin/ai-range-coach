@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './safe-network'
 import { readFileSync } from 'node:fs'
 test('priority path: actual video selection, playback, seek and JPEG', async ({ page }) => {
   await page.goto('./')
