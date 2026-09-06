@@ -162,8 +162,10 @@ test('shipped runtime config does not send analysis on video save or reopen; pas
   expect((await records(page))[0].sets[0].analysisResult).toBeNull()
   expect((await durableSummary(page)).metadata.length).toBe(0)
   expect(liveApiGuard.blockedRequests).toBe(0)
+  const build = await page.locator('.pwa-info small').textContent()
+  expect(build).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
   await info.attach('shipped-config-explicit-only.json', {
-    body: JSON.stringify({ appUrl: page.url(), apiUrl: expected.apiUrl, build: await page.locator('.pwa-info small').innerText(),
+    body: JSON.stringify({ appUrl: page.url(), apiUrl: expected.apiUrl, build,
       configured: Boolean(expected.apiUrl), credentialEntered: false, analysisClicked: false,
       pendingRequests: 0, blockedUnexpectedRequests: liveApiGuard.blockedRequests, liveApiPermitted: false }),
     contentType: 'application/json',
