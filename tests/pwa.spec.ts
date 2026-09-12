@@ -196,9 +196,28 @@ test('[local dist] changed worker waits without reloading an unsaved draft; clos
     await page.getByRole('button', { name: '内容を確認', exact: true }).click()
     await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
     await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
-    // An uncontrolled blank page lets us observe activation after every old client closes.
-    const reopened = await context.newPage()
+    // Observe B from the same-origin sibling, outside this worker's scope. Opening
+    // the app immediately after close can give A a new client before B activates.
+    const pendingUpdate = await sibling.evaluateHandle(async appUrl => {
+      const registration = await navigator.serviceWorker.getRegistration(appUrl)
+      if (!registration?.waiting) throw new Error('The installed update must still wait while the app is open')
+      return { registration, expectedWorker: registration.waiting }
+    }, `${origin}${appPath}`)
+    expect(await pendingUpdate.evaluate(update => update.expectedWorker.state)).toBe('installed')
     await page.close()
+    await expect.poll(() => pendingUpdate.evaluate(update => ({
+      siblingUncontrolled: navigator.serviceWorker.controller === null,
+      expectedWorkerActive: update.registration.active === update.expectedWorker,
+      activeState: update.registration.active?.state,
+      waitingCleared: update.registration.waiting === null,
+    })), { timeout: 15000 }).toEqual({ siblingUncontrolled: true, expectedWorkerActive: true, activeState: 'activated', waitingCleared: true })
+    const activationBeforeReopen = await pendingUpdate.evaluate(update => ({
+      scope: update.registration.scope, expectedWorkerState: update.expectedWorker.state,
+      expectedWorkerActive: update.registration.active === update.expectedWorker,
+      waitingCleared: update.registration.waiting === null,
+    }))
+    await pendingUpdate.dispose()
+    const reopened = await context.newPage()
     await reopened.goto(`${origin}${appPath}`)
     await expectActiveControlledWorker(reopened)
     await expect.poll(() => reopened.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting === null)).toBe(true)
@@ -222,6 +241,7 @@ test('[local dist] changed worker waits without reloading an unsaved draft; clos
     expect(await sibling.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.scope)).toBeUndefined()
     await test.info().attach('local-worker-update-audit.json', { body: JSON.stringify({
       testedUrl: reopened.url(), publishedSiteTest: false, servedWorkerRevisions,
+      activationBeforeReopen,
       scope: await reopened.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.scope),
       cacheNames: await reopened.evaluate(() => caches.keys()),
       build: await reopened.locator('.pwa-info small').innerText(),
