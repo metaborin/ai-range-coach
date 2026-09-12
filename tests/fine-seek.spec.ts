@@ -43,6 +43,7 @@ async function displayedRequest(page: Page) {
 test('fine requests move the decoded video, capture the latest requested image and preserve four saved scenes', async ({ page }, info) => {
   await page.goto('./')
   await page.locator('input[type=file]').setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(captureButton(page)).toBeEnabled()
   await expect(mode(page, '通常：0.1秒')).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'インパクト付近を選ぶ', exact: true }).click()
@@ -109,6 +110,7 @@ test('fine controls synchronize timeline and paused playback, gate rapid clicks,
   await page.goto('./')
   const input = page.locator('input[type=file]')
   await input.setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(captureButton(page)).toBeEnabled()
   await mode(page, '細かく：0.01秒').click()
   await seek(page, 1.2)
@@ -151,6 +153,7 @@ test('fine controls synchronize timeline and paused playback, gate rapid clicks,
 
   page.once('dialog', dialog => dialog.accept())
   await input.setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(captureButton(page)).toBeEnabled()
   expect(await displayedRequest(page)).toBe(0)
   await expect(timeline(page)).toHaveValue('0')

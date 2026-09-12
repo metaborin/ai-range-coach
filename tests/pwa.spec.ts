@@ -10,6 +10,7 @@ const appPath = `/${repository}/`
 
 async function saveRealVideoRecord(page: Page) {
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/synthetic.webm')
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   const capture = page.getByRole('button', { name: 'この場面にする', exact: true })
   await expect(capture).toBeEnabled()
   for (let index = 0; index < scenes.length; index++) {

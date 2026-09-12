@@ -330,4 +330,36 @@ describe('frame extraction and competing operations (video/canvas stubs)', () =>
     await vi.advanceTimersByTimeAsync(200);
     expect((await retried).blob).toBe(jpeg);
   });
+
+  it('aborts only the capture request during encoding and keeps the controller usable for a new request', async () => {
+    let oldCallback: BlobCallback | undefined;
+    canvas.toBlob.mockImplementationOnce((callback: BlobCallback) => { oldCallback = callback; });
+    const video = new FakeVideo();
+    const media = new MediaController(video.element());
+    const abort = new AbortController();
+    const pending = expect(media.capture(0, abort.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(oldCallback).toBeTypeOf('function');
+    abort.abort();
+    await pending;
+    const next = media.capture(1);
+    oldCallback!(jpeg);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(await next).toMatchObject({ requestedTimeSec: 1, blob: jpeg });
+  });
+
+  it('aborts an in-flight capture seek without waiting for its frame timeout', async () => {
+    const video = new FakeVideo();
+    video.enableFrames();
+    video.autoFrameNotifications = false;
+    const media = new MediaController(video.element());
+    const abort = new AbortController();
+    const result = expect(media.capture(1, abort.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    abort.abort();
+    await result;
+    expect(video.callbacks.size).toBe(0);
+    const next = media.capture(2);
+    await vi.advanceTimersByTimeAsync(500);
+    expect((await next).requestedTimeSec).toBe(2);
+  });
 });

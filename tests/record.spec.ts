@@ -65,6 +65,7 @@ async function captureScene(page: Page, label: string, time: number) {
 
 async function prepareFourScenes(page: Page) {
   await page.locator('input[type=file]').setInputFiles(fixture);
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(page.getByRole('button', { name: '再生', exact: true })).toBeEnabled();
   for (const scene of scenes) await captureScene(page, scene.label, scene.time);
 }
@@ -169,10 +170,12 @@ test('actual video → four distinct JPEGs → input → save/reload/edit/replac
   await page.getByRole('button', { name: '編集', exact: true }).click();
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.locator('input[type=file]').setInputFiles(fixture);
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(page.locator('.frames img')).toHaveCount(4);
   expect(await databaseSnapshot(page)).toEqual(edited);
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('input[type=file]').setInputFiles(fixture);
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(page.locator('.frames img')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'この場面にする', exact: true })).toBeEnabled();
   expect(await databaseSnapshot(page)).toEqual(edited);

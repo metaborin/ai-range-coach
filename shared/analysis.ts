@@ -1,12 +1,14 @@
 export const ANALYSIS_SCENES = ['address', 'top', 'impact', 'finish'] as const
 export type AnalysisScene = typeof ANALYSIS_SCENES[number]
 export const ANALYSIS_LABELS = { address: 'アドレス', top: 'トップ', impact: 'インパクト付近', finish: 'フィニッシュ' } as const
+export const CONTACT_LABELS = { good: '良い', fair: 'まずまず', poor: 'ミス', unknown: 'わからない' } as const
+export const DIRECTION_LABELS = { left: '左', center: 'ほぼまっすぐ', right: '右', unknown: 'わからない' } as const
 export const MAX_IMAGE_BYTES = 1024 * 1024
 export const MAX_IMAGES_BYTES = 4 * MAX_IMAGE_BYTES
 export const MAX_REQUEST_BYTES = 6 * 1024 * 1024
 export const REQUEST_RETENTION_MS = 24 * 60 * 60 * 1000
 export const RESULT_RETENTION_MS = 10 * 60 * 1000
-export const PROMPT_VERSION = 'phase1-1'
+export const PROMPT_VERSION = 'phase1-2'
 export const SCHEMA_VERSION = '1'
 export type AnalysisState = 'pending' | 'succeeded' | 'failed' | 'unknown' | 'expired' | 'not_found'
 export interface AnalysisFrame {

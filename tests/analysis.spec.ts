@@ -19,6 +19,7 @@ async function config(page: Page, enabled = true) {
 async function saveShot(page: Page) {
   await page.goto('./')
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/synthetic.webm')
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   const capture = page.getByRole('button', { name: 'この場面にする', exact: true })
   await expect(capture).toBeEnabled()
   for (let index = 0; index < scenes.length; index++) {
@@ -285,7 +286,13 @@ test('late analysis cannot overwrite dirty edits; result save failure keeps advi
   await page.getByRole('button', { name: 'AIで分析する', exact: true }).click()
   await expect.poll(() => calls).toBe(1)
   await page.getByRole('button', { name: '編集', exact: true }).click()
-  await page.getByRole('button', { name: '当たりと方向へ', exact: true }).click()
+  await expect(page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'かんたんに4場面を選ぶ', exact: true }).click()
+  await page.getByRole('slider', { name: 'タイムライン' }).fill('2.4')
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: 'このあたりを基準にする', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '4枚をまとめて確認', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'この4枚で進む', exact: true }).click()
   await page.getByRole('button', { name: '左', exact: true }).click()
   await expect(page.getByRole('button', { name: '左', exact: true })).toHaveAttribute('aria-pressed', 'true')
   release()
@@ -296,6 +303,7 @@ test('late analysis cannot overwrite dirty edits; result save failure keeps advi
   await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
   await expect(page.getByText('変更前の内容に対する分析です。現在の画像・時刻・本人入力で分析し直してください。', { exact: true })).toBeVisible()
   expect((await records(page))[0].sets[0].shots[0].selfReport.direction).toBe('left')
+  expect((await records(page))[0].sets[0].shots[0].scenes.impact?.requestedTimeSec).toBe(2.4)
   const oldResult = (await records(page))[0].sets[0].analysisResult!
   const originalPut = await page.evaluateHandle(() => IDBObjectStore.prototype.put)
   await page.evaluate(oldId => {

@@ -146,19 +146,20 @@ export class MediaController {
   }
 
   async seek(time: number): Promise<void> {
-    await this.run(async () => {
+    await this.run(async (signal) => {
       this.validateTime(time, false);
       this.video.pause();
-      await this.moveTo(time);
+      await this.moveTo(time, signal);
     });
   }
 
-  async capture(time: number): Promise<CapturedFrame> {
-    return this.run(async () => {
+  async capture(time: number, signal?: AbortSignal): Promise<CapturedFrame> {
+    return this.run(async (operationSignal) => {
       this.validateTime(time, true);
       this.video.pause();
-      const { currentTimeSec, ...frame } = await this.moveTo(time);
+      const { currentTimeSec, ...frame } = await this.moveTo(time, operationSignal);
       this.assertCurrent();
+      if (operationSignal.aborted) throw aborted();
       if (this.video.seeking || !this.video.paused || !this.atTime(currentTimeSec)) throw aborted();
       const scale = Math.min(1, 1280 / Math.max(this.video.videoWidth, this.video.videoHeight));
       const width = Math.max(1, Math.round(this.video.videoWidth * scale));
@@ -174,7 +175,7 @@ export class MediaController {
         } catch {
           throw new Error('動画の画像を静止画にできませんでした。別の位置で再試行するか、別の動画を選んでください。');
         }
-        const blob = await this.encode(canvas);
+        const blob = await this.encode(canvas, operationSignal);
         this.assertCurrent();
         if (this.video.seeking || !this.video.paused || !this.atTime(currentTimeSec)) throw aborted();
         return { blob, requestedTimeSec: time, ...frame, width, height };
@@ -182,17 +183,27 @@ export class MediaController {
         canvas.width = 0;
         canvas.height = 0;
       }
-    });
+    }, signal);
   }
 
-  private async run<T>(operation: () => Promise<T>): Promise<T> {
+  private async run<T>(operation: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
     this.assertCurrent();
+    if (signal?.aborted) throw aborted();
     if (this.busy) throw new Error('動画の位置調整・静止画作成が終わるまでお待ちください。');
+    // Cancel this request without disposing the controller used by manual seeking.
+    const operationAbort = new AbortController();
+    const cancel = () => operationAbort.abort();
+    this.lifetime.signal.addEventListener('abort', cancel, { once: true });
+    signal?.addEventListener('abort', cancel, { once: true });
     this.busy = true;
     try {
-      return await operation();
+      const result = await operation(operationAbort.signal);
+      if (operationAbort.signal.aborted) throw aborted();
+      return result;
     } finally {
       this.busy = false;
+      this.lifetime.signal.removeEventListener('abort', cancel);
+      signal?.removeEventListener('abort', cancel);
     }
   }
 
@@ -214,9 +225,8 @@ export class MediaController {
     }
   }
 
-  private moveTo(time: number): Promise<SettledFrame> {
+  private moveTo(time: number, signal: AbortSignal): Promise<SettledFrame> {
     const video = this.video;
-    const signal = this.lifetime.signal;
     // Comparing only currentTime can skip a new request when the browser exposes
     // a rounded position. Only a previously settled, identical request may skip.
     const previous = this.settledPosition;
@@ -334,8 +344,7 @@ export class MediaController {
     });
   }
 
-  private encode(canvas: HTMLCanvasElement): Promise<Blob> {
-    const signal = this.lifetime.signal;
+  private encode(canvas: HTMLCanvasElement, signal: AbortSignal): Promise<Blob> {
     return new Promise((resolve, reject) => {
       let finished = false;
       const cleanup = () => {

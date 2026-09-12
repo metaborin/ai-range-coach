@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 test('priority path: actual video selection, playback, seek and JPEG', async ({ page }) => {
   await page.goto('./')
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/synthetic.webm')
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(page.getByRole('button', { name: '再生', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: '再生', exact: true }).click()
   await expect.poll(() => page.locator('video').evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0)
@@ -34,6 +35,7 @@ test('empty MIME, cancellation, same-time fallback and rapid actions stay recove
   expect(await input.getAttribute('multiple')).toBeNull()
   expect(await input.getAttribute('capture')).toBeNull()
   await input.setInputFiles({ name: 'empty-mime.MOV', mimeType: '', buffer: readFileSync('tests/fixtures/synthetic.webm') })
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(page.getByRole('button', { name: 'この場面にする', exact: true })).toBeEnabled()
   await input.setInputFiles([])
   await page.getByRole('slider').fill('1.4')
@@ -63,5 +65,6 @@ test('empty MIME, cancellation, same-time fallback and rapid actions stay recove
   await expect(page.getByRole('alert')).toContainText('読み込めませんでした', { timeout: 20000 })
   page.once('dialog', dialog => dialog.accept())
   await input.setInputFiles('tests/fixtures/synthetic.webm')
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(capture).toBeEnabled()
 })

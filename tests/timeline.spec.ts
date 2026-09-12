@@ -65,6 +65,7 @@ test('continuous delayed drag follows every input and commits the latest decoded
   await delayFrameDelivery(page)
   await page.goto('./')
   await page.locator('input[type=file]').setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(capture(page)).toBeEnabled()
   await captureScene(page, 'アドレス', 0.4)
   await captureScene(page, 'トップ', 1.4)
@@ -164,6 +165,7 @@ test('outside release, pointer cancellation, blur and rapid keyboard changes lea
   await page.goto('./')
   const input = page.locator('input[type=file]')
   await input.setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(capture(page)).toBeEnabled()
   const checkpoints: { operation: string; value: number }[] = []
 
@@ -234,6 +236,7 @@ test('outside release, pointer cancellation, blur and rapid keyboard changes lea
 
   page.once('dialog', dialog => dialog.accept())
   await input.setInputFiles(fixture)
+  await page.getByRole('button', { name: '1枚ずつ選ぶ', exact: true }).click()
   await expect(capture(page)).toBeEnabled()
   await expect(range(page)).toHaveValue('0')
   expect(await requested(page)).toBe(0)

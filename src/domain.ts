@@ -1,4 +1,5 @@
-import { validateAiAnalysis, type AiAnalysis } from '../shared/analysis';
+import { CONTACT_LABELS, DIRECTION_LABELS, validateAiAnalysis, type AiAnalysis } from '../shared/analysis';
+export { CONTACT_LABELS, DIRECTION_LABELS } from '../shared/analysis';
 export type { AiAnalysis } from '../shared/analysis';
 export type Scene = 'address' | 'top' | 'impact' | 'finish';
 export type Contact = 'good' | 'fair' | 'poor' | 'unknown';
@@ -7,12 +8,6 @@ export type Direction = 'left' | 'center' | 'right' | 'unknown';
 export const SCENES = ['address', 'top', 'impact', 'finish'] as const;
 export const SCENE_LABELS: Record<Scene, string> = {
   address: 'アドレス', top: 'トップ', impact: 'インパクト付近', finish: 'フィニッシュ',
-};
-export const CONTACT_LABELS: Record<Contact, string> = {
-  good: '良い', fair: 'まずまず', poor: 'ミス', unknown: 'わからない',
-};
-export const DIRECTION_LABELS: Record<Direction, string> = {
-  left: '左', center: 'ほぼまっすぐ', right: '右', unknown: 'わからない',
 };
 export const MAX_VIDEO_BYTES = 104857600;
 export const MAX_VIDEO_SECONDS = 30;

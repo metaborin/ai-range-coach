@@ -155,6 +155,20 @@ describe('real SQLite Durable Object; only the OpenAI network is mocked', { conc
     } finally { await app.close() }
   })
 
+  it('keeps a previously stored prompt version and advice on GET or duplicate POST after an instruction update', async () => {
+    const app = await harness()
+    try {
+      const input = await analysisRequest()
+      const first = await (await app.send(input)).json()
+      assert.equal(first.result.promptVersion, 'phase1-2')
+      const previousResult = { ...first.result, promptVersion: 'phase1-1', advice: { ...first.result.advice, nextFocus: '従来の保存済み分析文。' } }
+      await app.sql('UPDATE requests SET result_json=? WHERE request_id=?', JSON.stringify(previousResult), input.requestId)
+      assert.deepEqual((await (await app.get(input.requestId)).json()).result, previousResult)
+      assert.deepEqual((await (await app.send(input)).json()).result, previousResult)
+      assert.equal(app.calls.length, 1)
+    } finally { await app.close() }
+  })
+
   it('recovers an interrupted persisted request as unknown and releases its bounded lock without resubmitting', async () => {
     const app = await harness()
     try {
