@@ -127,7 +127,7 @@ test('one anchor creates actual JPEG candidates; one repair preserves three imag
   await generate(page, 2.4)
   await expect(page.getByText('仮の候補です。場面が合っているか確認してください', { exact: true })).toBeVisible()
   const initial = await shownImages(page)
-  const expectedTimes = [0.9, 2.15, 2.4, 3.2]
+  const expectedTimes = [0.4, 2.15, 2.4, 3.2]
   const colors = [[210, 40, 35], [30, 70, 220], [30, 70, 220], [220, 160, 30]]
   initial.forEach((frame, index) => {
     if ('missing' in frame) throw new Error('A full in-range batch omitted a candidate')
@@ -176,7 +176,18 @@ test('one anchor creates actual JPEG candidates; one repair preserves three imag
 
 test('out-of-range candidates stay missing; manual repair enforces order and dismissed regeneration preserves existing images', async ({ page }, info) => {
   await load(page)
-  await generate(page, 0.15)
+  await generate(page, 1.8)
+  await expect(page.locator('.frames img')).toHaveCount(3)
+  await expect(next(page)).toBeDisabled()
+  const nearStart = await shownImages(page)
+  expect(nearStart).toMatchObject([{ scene: 'address', missing: true }, { scene: 'top', requestedTime: 1.55 }, { scene: 'impact', requestedTime: 1.8 }, { scene: 'finish', requestedTime: 2.6 }])
+  await repair(page, 'address', 0.2)
+  const completedNearStart = await shownImages(page)
+  expect(completedNearStart[0]).toMatchObject({ scene: 'address', requestedTime: 0.2 })
+  for (const index of [1, 2, 3]) expect(completedNearStart[index]).toEqual(nearStart[index])
+  await expect(next(page)).toBeEnabled()
+  await page.getByRole('button', { name: 'かんたんに4場面を選ぶ', exact: true }).click()
+  await generate(page, 0.15, true)
   await expect(page.locator('.frames img')).toHaveCount(2)
   await expect(next(page)).toBeDisabled()
   expect(await shownImages(page)).toMatchObject([{ scene: 'address', missing: true }, { scene: 'top', missing: true }, { scene: 'impact', requestedTime: 0.15 }, { scene: 'finish', requestedTime: 0.95 }])
@@ -189,7 +200,7 @@ test('out-of-range candidates stay missing; manual repair enforces order and dis
   await page.getByRole('button', { name: 'かんたんに4場面を選ぶ', exact: true }).click()
   await generate(page, 4.5, true)
   const late = await shownImages(page)
-  expect(late).toMatchObject([{ scene: 'address', requestedTime: 3 }, { scene: 'top', requestedTime: 4.25 }, { scene: 'impact', requestedTime: 4.5 }, { scene: 'finish', missing: true }])
+  expect(late).toMatchObject([{ scene: 'address', requestedTime: 2.5 }, { scene: 'top', requestedTime: 4.25 }, { scene: 'impact', requestedTime: 4.5 }, { scene: 'finish', missing: true }])
   await expect(next(page)).toBeDisabled()
   await page.getByRole('button', { name: 'かんたんに4場面を選ぶ', exact: true }).click()
   await expect(anchor(page)).toBeEnabled()
@@ -198,7 +209,7 @@ test('out-of-range candidates stay missing; manual repair enforces order and dis
   await manual(page).click()
   expect(await shownImages(page)).toEqual(late)
   expect((await persisted(page)).sessions).toHaveLength(0)
-  await info.attach('assist-missing-audit.json', { body: JSON.stringify({ firstAnchor: 0.15, lateAnchor: 4.5, late, clampedToEndpoint: false, dismissedRegenerationPreservedImages: true }), contentType: 'application/json' })
+  await info.attach('assist-missing-audit.json', { body: JSON.stringify({ url: page.url(), build: await page.locator('.pwa-info small').textContent(), nearStartAnchor: 1.8, nearStart, completedNearStart, otherThreePreservedAfterAddressRepair: true, firstAnchor: 0.15, lateAnchor: 4.5, late, clampedToEndpoint: false, dismissedRegenerationPreservedImages: true }), contentType: 'application/json' })
 })
 
 test('cancelling, changing mode, re-anchoring and replacing video during delayed real encoding cannot mix old batches or alter the saved record', async ({ page }) => {
@@ -228,7 +239,7 @@ test('cancelling, changing mode, re-anchoring and replacing video during delayed
     await encoding.evaluate(state => { state.hold = false })
     await generate(page, 2.6, true)
     const replacement = await shownImages(page)
-    expect(replacement).toMatchObject([{ requestedTime: 1.1 }, { requestedTime: 2.35 }, { requestedTime: 2.6 }, { requestedTime: 3.4 }])
+    expect(replacement).toMatchObject([{ requestedTime: 0.6 }, { requestedTime: 2.35 }, { requestedTime: 2.6 }, { requestedTime: 3.4 }])
     await encoding.evaluate(state => state.releaseAll())
     await expect.poll(() => encoding.evaluate(state => state.pending)).toBe(0)
     expect(await shownImages(page)).toEqual(replacement)
@@ -298,7 +309,7 @@ test('failed candidate extraction and failed candidate save leave the last saved
     await page.getByRole('button', { name: 'この端末に保存', exact: true }).click()
     await expect(page.getByRole('alert')).toContainText('保存容量が足りません')
     expect(await persisted(page)).toEqual(saved)
-    expect(await shownImages(page)).toMatchObject([{ requestedTime: 1.1 }, { requestedTime: 2.35 }, { requestedTime: 2.6 }, { requestedTime: 3.4 }])
+    expect(await shownImages(page)).toMatchObject([{ requestedTime: 0.6 }, { requestedTime: 2.35 }, { requestedTime: 2.6 }, { requestedTime: 3.4 }])
   } finally {
     await page.evaluate(original => { IDBObjectStore.prototype.put = original }, originalPut)
     await originalPut.dispose(); await encoding.dispose()

@@ -4,10 +4,11 @@ import type { CapturedFrame } from './media';
 /**
  * Temporary normal-speed offsets, introduced for the 2026-09 capture-assist trial.
  * These reduce repeated seeking; they are not measured golf phase timings.
- * Change this single table after the user's real-video evaluation, recording why.
+ * Address moved 0.5 seconds earlier on 2026-09-13 after the user reported it
+ * already showed the swing starting. This is a provisional trial, not a measured optimum.
  */
 export const CAPTURE_ASSIST_OFFSETS_SEC: Readonly<Record<Scene, number>> = Object.freeze({
-  address: -1.5,
+  address: -2.0,
   top: -0.25,
   impact: 0,
   finish: 0.8,

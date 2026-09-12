@@ -4,20 +4,20 @@ import type { CapturedFrame } from './media';
 
 const frameAt = (time: number): CapturedFrame => ({
   blob: new Blob(['synthetic-jpeg'], { type: 'image/jpeg' }),
-  requestedTimeSec: time, observedTimeSec: time - 0.01, timeBasis: 'video-current-time', width: 320, height: 180,
+  requestedTimeSec: time, observedTimeSec: Math.max(0, time - 0.01), timeBasis: 'video-current-time', width: 320, height: 180,
 });
 
 describe('local capture assistance', () => {
   it('uses provisional offsets in scene order and omits out-of-range scenes without clamping', () => {
     expect(planCaptureCandidates(2, 5)).toEqual([
-      { scene: 'address', requestedTimeSec: 0.5 }, { scene: 'top', requestedTimeSec: 1.75 },
+      { scene: 'address', requestedTimeSec: 0 }, { scene: 'top', requestedTimeSec: 1.75 },
       { scene: 'impact', requestedTimeSec: 2 }, { scene: 'finish', requestedTimeSec: 2.8 },
     ]);
     expect(planCaptureCandidates(0.1, 0.5)).toEqual([{ scene: 'impact', requestedTimeSec: 0.1 }]);
     expect(planCaptureCandidates(0.05, 0.1)).toEqual([{ scene: 'impact', requestedTimeSec: 0.05 }]);
     expect(planCaptureCandidates(2.3, 3.1).some((target) => target.scene === 'finish')).toBe(false);
     expect(planCaptureCandidates(1.5, 2.3)).toEqual([
-      { scene: 'address', requestedTimeSec: 0 }, { scene: 'top', requestedTimeSec: 1.25 }, { scene: 'impact', requestedTimeSec: 1.5 },
+      { scene: 'top', requestedTimeSec: 1.25 }, { scene: 'impact', requestedTimeSec: 1.5 },
     ]);
     for (const anchor of [-1, NaN, Infinity, 5]) expect(() => planCaptureCandidates(anchor, 5)).toThrow();
     for (const duration of [0, -1, NaN, Infinity]) expect(() => planCaptureCandidates(0, duration)).toThrow();
@@ -75,12 +75,12 @@ describe('local capture assistance', () => {
     const pending = collectCaptureCandidates(capture, 2, 5, { signal: abort.signal, onProgress: progress });
     const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     abort.abort();
-    release!(frameAt(0.5));
+    release!(frameAt(0));
     await rejected;
     expect(capture).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledTimes(1);
     const fresh = await collectCaptureCandidates(async (time) => frameAt(time), 3, 5, { signal: new AbortController().signal });
-    expect(fresh.frames.address?.requestedTimeSec).toBe(1.5);
+    expect(fresh.frames.address?.requestedTimeSec).toBe(1);
     expect(fresh.frames.impact?.requestedTimeSec).toBe(3);
   });
 
